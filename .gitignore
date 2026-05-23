@@ -1,0 +1,54 @@
+# --- Proprietary / sensitive data ---
+*.mdd
+*.ddf
+
+# Outputs / generated artifacts
+dist/
+compiled/
+build/
+TEMPLATE_COMPILED/
+.env
+
+# Reports generated from real data
+report.*
+
+# Examples directory (top-level only)
+examples/
+
+# Test directories (case-insensitive, any level)
+# [Tt]est*/
+tests-real-sensitive-data/
+test-results/
+
+# exclude auto-generated _VERSION
+src/_VERSION.py
+
+# --- Python artifacts ---
+__pycache__/
+*.pyc
+# Virtual environments
+.venv/
+venv/
+
+# --- OS junk files ---
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100/
+.Trashes/
+
+# Optional: Windows shortcuts
+*.lnk
+
+# Keep .gitignore itself
+!.gitignore

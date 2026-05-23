@@ -1,1 +1,2 @@
-# webserve-auth
+# html-template
+Basic template for webserve

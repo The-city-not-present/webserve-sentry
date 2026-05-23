@@ -1,0 +1,3 @@
+
+class SessionStorage:
+    """pass"""
