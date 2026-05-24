@@ -41,17 +41,19 @@ STDOUT_COLOR_GREEN = "\033[32m"
 
 load_dotenv()
 PORT_NUM = os.getenv("PORT_NUM", "")
-REDIS_ACCESS_PORT = os.getenv("REDIS_ACCESS_PORT", "")
+REDIS_ACCESS_HOST = os.getenv("REDIS_ACCESS_HOST", "")
 
 
 
 def get_handler():
-    redis_port = None
+    redis_host = (None,None,)
     try:
-        redis_port = int(REDIS_ACCESS_PORT)
+        redis_host = f'{redis_host}'.split(':')
+        assert len(redis_host) == 2, f'Must be host:port: {REDIS_ACCESS_HOST}'
+        redis_host = (f'{redis_host[0]}'.strip(),int(redis_host[1]))
     except Exception as e:
-        raise Exception(f'Can\'t parse redis port spec: {REDIS_ACCESS_PORT}') from e
-    r = redis.Redis(host='localhost', port=redis_port, decode_responses=True)
+        raise Exception(f'Can\'t parse redis port spec: {REDIS_ACCESS_HOST}') from e
+    r = redis.Redis(host=redis_host[0], port=redis_host[1], decode_responses=True)
     sentry = Sentry()
     class Handler(BaseHTTPRequestHandler):
         def handle_request(self):
