@@ -48,11 +48,11 @@ REDIS_ACCESS_HOST = os.getenv("REDIS_ACCESS_HOST", "")
 def get_handler():
     redis_host = (None,None,)
     try:
-        redis_host = f'{redis_host}'.split(':')
+        redis_host = f'{REDIS_ACCESS_HOST}'.split(':')
         assert len(redis_host) == 2, f'Must be host:port: {REDIS_ACCESS_HOST}'
         redis_host = (f'{redis_host[0]}'.strip(),int(redis_host[1]))
     except Exception as e:
-        raise Exception(f'Can\'t parse redis port spec: {REDIS_ACCESS_HOST}') from e
+        raise Exception(f'Can\'t parse redis host spec: {REDIS_ACCESS_HOST}: Error: {e}') from e
     r = redis.Redis(host=redis_host[0], port=redis_host[1], decode_responses=True)
     sentry = Sentry()
     class Handler(BaseHTTPRequestHandler):
