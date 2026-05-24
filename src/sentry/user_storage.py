@@ -1,7 +1,7 @@
 
 from collections.abc import MutableMapping
 
-class UsersStorage(MutableMapping):
+class UserStorage(MutableMapping):
     def __init__(self):
         self._data = {}
 

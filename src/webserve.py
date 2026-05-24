@@ -3,23 +3,25 @@ import argparse
 import traceback, sys
 from dotenv import load_dotenv
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 # src/webserve.py
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 from http.cookies import SimpleCookie
+import redis
+import json
 
 
 
 if __name__ == '__main__':
     # run as a program
-    from sentry import Sentry, SentryReject
+    from sentry import Sentry, SentryReject, RequestToSentry, ContextForSentry
 elif '.' in __name__:
     # package
-    from .sentry import Sentry, SentryReject
+    from .sentry import Sentry, SentryReject, RequestToSentry, ContextForSentry
 else:
     # included with no parent package
-    from sentry import Sentry, SentryReject
+    from sentry import Sentry, SentryReject, RequestToSentry, ContextForSentry
 
 
 
@@ -39,47 +41,105 @@ STDOUT_COLOR_GREEN = "\033[32m"
 
 load_dotenv()
 PORT_NUM = os.getenv("PORT_NUM", "")
+REDIS_ACCESS_PORT = os.getenv("REDIS_ACCESS_PORT", "")
 
 
 
 def get_handler():
+    redis_port = None
+    try:
+        redis_port = int(REDIS_ACCESS_PORT)
+    except Exception as e:
+        raise Exception(f'Can\'t parse redis port spec: {REDIS_ACCESS_PORT}') from e
+    r = redis.Redis(host='localhost', port=redis_port, decode_responses=True)
     sentry = Sentry()
     class Handler(BaseHTTPRequestHandler):
         def handle_request(self):
             try:
 
+                time_now = datetime.now(UTC)
                 ip = self.headers.get("X-Real-IP")
-                path = urlparse(self.path).path
+                request_path = urlparse(self.path).path
                 headers = self.headers # case-insensitive dict
-                cookie_header = self.headers.get('send_cookie')
+                cookie_header = self.headers.get('Cookie')
                 cookies = SimpleCookie(cookie_header)
 
                 result = {}
                 try:
-                    print("Incoming auth check")
-                    print(self.headers)
-                    result = sentry.process(ip=ip,path=path,headers=headers,cookies=cookies)
-                except SentryReject:
-                    conent_type = 'text/html' if not (self.headers.get("Accept") == "application/json") else 'application/json'
-                    self.send_response(401)
-                    self.send_header(f"Content-type", f"{conent_type}; charset=utf-8")
+                    print(f"Incoming auth check from {ip}, requested {request_path}, on {time_now}...") # , end="", flush=True
+                    # print(self.headers)
+
+                    result = sentry.process(
+                        ContextForSentry(
+                            redis=r,
+                        ),
+                        RequestToSentry(
+                            ip = ip,
+                            request_path = request_path,
+                            headers = headers,
+                            cookies = cookies,
+                            time_now = time_now,
+                        )
+                    ).response
+
+                    assert 'visitorid' in result
+                    assert 'sessionid' in result
+                    send_cookie = SimpleCookie()
+                    send_cookie["sessionid"] = result['sessionid']
+                    send_cookie["sessionid"]["httponly"] = True
+                    send_cookie["sessionid"]["secure"] = True
+                    send_cookie["sessionid"]["path"] = "/"
+                    send_cookie["visitorid"] = result['visitorid']
+                    send_cookie["visitorid"]["httponly"] = True
+                    send_cookie["visitorid"]["secure"] = True
+                    send_cookie["visitorid"]["path"] = "/"
+
+                    content_type = 'text/html' if not (self.headers.get("Accept") == "application/json") else 'application/json'
+                    self.send_response(200)
+                    self.send_header(f"Content-type", f"{content_type}; charset=utf-8")
+                    for morsel in send_cookie.values():
+                        # TODO: make sure nginx forwards / merged cookies
+                        self.send_header("Set-cookie", morsel.OutputString())
+                        print(f'(trying to) set-cookie (from sentry service): {morsel.OutputString()}')
                     self.end_headers()
+                    print("Incoming auth check ->  ok!")
+                    try:
+                        redis_pipe_log = r.pipeline()
+                        redis_pipe_log.rpush("auth:requests", json.dumps({
+                            'datetime': f'{time_now.isoformat()}',
+                            'ip': ip,
+                            'request_path': request_path,
+                            'result': 'allowed',
+                            'details': {
+                                'sessionid': result.get('sessionid',None),
+                                'visitorid': result.get('visitorid',None),
+                                'userid': result.get('userid',None),
+                            },
+                        }))
+                        redis_pipe_log.execute()
+                    except (redis.exceptions.ConnectionError, ConnectionRefusedError) as e:
+                        raise ConnectionRefusedError(f'Failed to connect to redis: {e}') from e
+
+                except SentryReject as e:
+
+                    content_type = 'text/html' if not (self.headers.get("Accept") == "application/json") else 'application/json'
+                    self.send_response(401)
+                    self.send_header(f"Content-type", f"{content_type}; charset=utf-8")
+                    self.end_headers()
+                    print(f"Incoming auth check ->  rejected! Reason: {e}")
+                    try:
+                        redis_pipe_log = r.pipeline()
+                        redis_pipe_log.rpush("auth:requests", json.dumps({
+                            'datetime': f'{time_now.isoformat()}',
+                            'ip': ip,
+                            'request_path': request_path,
+                            'result': 'reject',
+                            'details': f'{e}',
+                        }))
+                        redis_pipe_log.execute()
+                    except (redis.exceptions.ConnectionError, ConnectionRefusedError) as e:
+                        raise ConnectionRefusedError(f'Failed to connect to redis: {e}') from e
                     return;
-
-                assert 'visitorid' in result
-                assert 'sessionid' in result
-                send_cookie = SimpleCookie()
-                send_cookie["sessionid"] = result['sessionid']
-                send_cookie["sessionid"]["httponly"] = True
-                send_cookie["sessionid"]["secure"] = True
-                send_cookie["sessionid"]["path"] = "/"
-
-                conent_type = 'text/html' if not (self.headers.get("Accept") == "application/json") else 'application/json'
-                self.send_response(200)
-                self.send_header(f"Content-type", f"{conent_type}; charset=utf-8")
-                for morsel in send_cookie.values():
-                    self.send_header("Set-send_cookie", morsel.OutputString())
-                self.end_headers()
 
             except Exception as e:
                 self.send_response(500)
