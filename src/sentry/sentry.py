@@ -2,7 +2,9 @@
 # import uuid
 import secrets
 
-# from .session_storage import SessionStorage
+from .session_storage import SessionStorage
+from .visitors_storage import VisitorsStorage
+from .users_storage import UsersStorage
 
 
 class SentryReject(Exception):
@@ -13,7 +15,7 @@ class Sentry:
     def __init__(self):
         self.session_storage = dict() # SessionStorage()
         self.visitors_storage = dict() # VisitorsStorage()
-        self.users_storage = dict() # UsersStorage()
+        self.users_storage = UsersStorage()
 
     def process(self,ip,path,headers,cookies):
         """

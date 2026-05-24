@@ -1,7 +1,7 @@
 
 from collections.abc import MutableMapping
 
-class SessionStorage(MutableMapping):
+class VisitorsStorage(MutableMapping):
     def __init__(self):
         self._data = {}
 
