@@ -274,7 +274,7 @@ class SentryRecord:
                     redis_pipe_write.rpush(f"auth:timing_counter:sessionid:{self.response.get("sessionid")}", time_now_str)
                     redis_pipe_write.expire(f"auth:timing_counter:sessionid:{self.response.get("sessionid")}", MAX_TIMINGCOUNTER_AGE_PULL)
                 if self.response.get("sessionid") and request.ip:
-                    last_sessions_from_ip = redis.lrange(f"auth:session2ip:ip:{request.ip}", -MAX_TIMINGCOUNTER_RECORDS_PULL-1, -1)
+                    last_sessions_from_ip = context.redis.lrange(f"auth:session2ip:ip:{request.ip}", -MAX_TIMINGCOUNTER_RECORDS_PULL-1, -1)
                     did_session_from_this_ip_exist_before = len([record for record in last_sessions_from_ip if record==self.response.get("sessionid")])>0
                     if not did_session_from_this_ip_exist_before:
                         redis_pipe_write.rpush(f"auth:timing_counter:newsessionsperip:{request.ip}", time_now_str)
